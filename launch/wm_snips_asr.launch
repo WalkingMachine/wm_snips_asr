@@ -1,0 +1,4 @@
+<launch>
+    <node name="wm_snips_node" pkg="wm_snips_asr" type="wm_snips_service.py" output="screen" >
+    </node>
+</launch>
