@@ -105,6 +105,7 @@ class Snips_Services_Start(Thread):
         self.pOn = printOn
         self.daemon = True
         self.alive = True
+        self.services = []
         self.start()
         atexit.register(self.sysexit_callback)
         # signal.signal(signal.SIGINT, self.exit_gracefully)  #Fonctionne
@@ -131,22 +132,17 @@ class Snips_Services_Start(Thread):
             sleep(1)
 
     def _start_services(self):
-        self.s1 = _Snips_Service("snips-audio-server"   , "audio", printOn=self.pOn)
-        self.s2 = _Snips_Service("snips-asr"            , "asr  ", printOn=self.pOn)
-        self.s3 = _Snips_Service("snips-tts"            , "tts  ", printOn=self.pOn)
-        self.s4 = _Snips_Service("snips-hotword"        , "hotwd", printOn=self.pOn)
-        self.s5 = _Snips_Service("snips-dialogue"       , "dialo", printOn=self.pOn)
-        self.s6 = _Snips_Service("snips-nlu"            , "nlu  ", printOn=self.pOn)
-        self.s7 = _Snips_Service("snips-injection"      , "injec", printOn=self.pOn)
+        self.services.append(_Snips_Service("snips-audio-server"   , "audio", printOn=self.pOn))
+        self.services.append(_Snips_Service("snips-asr"            , "asr  ", printOn=self.pOn))
+        self.services.append(_Snips_Service("snips-tts"            , "tts  ", printOn=self.pOn))
+        # self.services.append(_Snips_Service("snips-hotword"        , "hotwd", printOn=self.pOn))
+        self.services.append(_Snips_Service("snips-dialogue"       , "dialo", printOn=self.pOn))
+        self.services.append(_Snips_Service("snips-nlu"            , "nlu  ", printOn=self.pOn))
+        self.services.append(_Snips_Service("snips-injection"      , "injec", printOn=self.pOn))
 
     def _stop_services(self):
-        self.s1.terminate()
-        self.s2.terminate()
-        self.s3.terminate()
-        self.s4.terminate()
-        self.s5.terminate()
-        self.s6.terminate()
-        self.s7.terminate()
+        for service in self.services:
+            service.terminate()
 
     def _close_os_snips_process(self):
         # PAS ENCORE UTILISE, INSTABLE
