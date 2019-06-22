@@ -11,6 +11,7 @@ from time import sleep, time
 from threading import Thread
 #   Local import
 from snips_services import Snips_Services_Start
+from snips_tests import Snips_Action_Tests
 
 #   MQTT constantes
 MQTT_HOST               = 'localhost'
@@ -22,9 +23,9 @@ MQTT_SNIPS_END_SESSION  = "hermes/dialogueManager/endSession"
 ROS_MESSAGE_I_ACTIVE_LISTENING  = "/wm_snips_asr/enable_listening"
 ROS_MESSAGE_O_ASR_TEXT          = "/wm_snips_asr/asr_brut_text"
 #   Modes
-MQTT_SUBSCRIBE_ALL = False
+MQTT_SUBSCRIBE_ALL = True
 SNIPS_AUTO_LISTEN  = False  # Non fonctionnel
-TEST_FEATURES      = False
+MODE_TESTS         = True
 
 
 def snips_get_speach_text(msg):
@@ -88,9 +89,8 @@ class Snips_Anser(Thread):
         self.listening_start_time = 0
         self.hotword_detect_time = 0
         self.understand_at_time = 0
-        #   Flags
-        self.auto_listen_flag = False
-        self.waiting_command_flag = None
+        # Classe de tests
+        self.tests = Snips_Action_Tests()
 
     def run(self):
         print("[MQTT]: rospy.spin()")
@@ -116,10 +116,12 @@ class Snips_Anser(Thread):
 
     def on_message(self, client, userdata, msg):
         """ On MQTT message : callback """
-
         if MQTT_SUBSCRIBE_ALL and msg.topic != "hermes/audioServer/default/audioFrame":
             print(msg.topic)
-            print(msg.payload.decode("utf-8"))
+            # print(msg.payload.decode("utf-8"))
+
+        if MODE_TESTS:
+            self.tests.execute(msg, client)
 
         if msg.topic.find(MQTT_ALL_INTENT) == 0:
             brutText, sessionID = snips_get_speach_text(msg)
@@ -146,30 +148,33 @@ class Snips_Anser(Thread):
             self.hotword_detect_time = time()
 
 
-#   Main code, not a tests
+class wm_snips_service():
+    def __init__(self):
+        snips = Snips_Services_Start()
+        client = mqtt.Client()
+        snips_anser = Snips_Anser()
+        client.on_connect = snips_anser.on_connect
+        client.on_message = snips_anser.on_message
+        connected = client.connect(MQTT_HOST, MQTT_PORT, 60)  # connected if 0
+
+        messages = [
+            "I\'m Listening",
+            "Sara here",
+            "Hi",
+            "i like train",
+            "mon osti de calisse",
+            "Qua say tue veu tway",
+            "i\'m stock, but i\'m stil going!",
+            "you are not alone anymore",
+            "stop messing up with me",
+            "be carful with me"]
+        hello = messages[random.randint(0, len(messages) - 1)]
+        #hello = "I\'m Listening"
+        client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
+        print("[MQTT]: loop_forever()")
+        client.loop_forever()
+        snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
+
+
 if __name__ == "__main__":
-    snips = Snips_Services_Start()
-
-    client = mqtt.Client()
-    snips_anser = Snips_Anser()
-    client.on_connect = snips_anser.on_connect
-    client.on_message = snips_anser.on_message
-    connected = client.connect(MQTT_HOST, MQTT_PORT, 60)  # connected if 0
-
-    messages = [
-        "I\'m Listening",
-        "Sara here",
-        "Hi",
-        "i like train",
-        "mon osti de calisse",
-        "Qua say tue veu tway",
-        "i\'m stock, but i\'m stil going!",
-        "you are not alone anymore",
-        "stop messing up with me",
-        "be carful with me"]
-    hello = messages[random.randint(0, len(messages) - 1)]
-    hello = "I\'m Listening"
-    client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
-    print("[MQTT]: loop_forever()")
-    client.loop_forever()
-    snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
+    wm_snips_service()
