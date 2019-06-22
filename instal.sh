@@ -18,3 +18,4 @@ sudo apt-get install -y snips-template snips-skill-server --allow-unauthenticate
 
 # Désactive les services
 sudo systemctl disable snips-*
+sudo rm system/multi-user.target.wants/snips-*
