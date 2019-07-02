@@ -121,6 +121,9 @@ class Snips_Anser(Thread):
 
         if msg.topic.find(MQTT_ALL_INTENT) == 0:
             brutText, sessionID = snips_get_speach_text(msg)
+
+            # Remove unknown words
+            brutText.replace("unknownword", "")
             rospy.loginfo("[ROS Publish]" + str(brutText))
             self.pub.publish(brutText)
             self.understand_at_time = time()
@@ -136,7 +139,8 @@ class Snips_Anser(Thread):
             # Verrifier si snips as entendus quelque chose
             if (self.understand_at_time < self.listening_start_time):
                 rospy.loginfo("[MQTT] Snips: rien entendus")
-                client.publish("hermes/tts/say", '{"text": "I didnt ear anything", "lang": "en", "siteId":"default"}')
+                # client.publish("hermes/tts/say", '{"text": "I didnt ear anything", "lang": "en", "siteId":"default"}')
+                self.pub.publish("")
             # Tests mode continus
             self.supervisor.listening = False
 
@@ -157,8 +161,8 @@ if __name__ == "__main__":
 
 
 
-        hello = "I\'m Listening"
-        client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
+        #hello = "I\'m Listening"
+        #client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
         rospy.loginfo("[MQTT]: loop_forever()")
         while not rospy.is_shutdown():
             client.loop()
