@@ -6,7 +6,7 @@ import json
 import random
 import rospy
 import os
-from std_msgs.msg import String
+from std_msgs.msg import String, Empty
 from time import sleep, time
 from threading import Thread
 #   Local import
@@ -40,7 +40,7 @@ def snips_get_speach_text(msg):
         out         = dicti["input"]
         sessionID   = dicti["sessionId"]
     except Exception as e:
-        print("[ERROR][snips_get_speach_text] " + str(e))
+        rospy.loginfo("[ERROR][snips_get_speach_text] " + str(e))
     return out, sessionID
 
 
@@ -60,8 +60,8 @@ class Snips_MQTT_Supervisor(Thread):
         self.start()
 
     def run(self):
-        print("[Snips_Supervisor] run")
-        while(True):
+        rospy.loginfo("[Snips_Supervisor] run")
+        while not rospy.is_shutdown():
             # Mode d'ecoute continus
             if (self.listening is True) and (time() - self.last_mqtt_message_time > 5.0) and MODE_HELP_LISTENING:
                 print("Force listening")
@@ -84,9 +84,10 @@ class Snips_Anser(Thread):
     def __init__(self, mqtt_client):
         Thread.__init__(self)
         self.mqtt_client = mqtt_client
-        rospy.init_node('wm_snips_service', anonymous=True)
-        rospy.Subscriber(ROS_MESSAGE_I_ACTIVE_LISTENING, String, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_ACTIVE_LISTENING))
-        rospy.Subscriber(ROS_MESSAGE_I_TTS             , String, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_TTS))
+        rospy.init_node('wm_snips_service')
+        rospy.Subscriber(ROS_MESSAGE_I_ACTIVE_LISTENING, Empty, self.callback_ros_on_message)
+        #rospy.Subscriber(ROS_MESSAGE_I_ACTIVE_LISTENING, String, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_ACTIVE_LISTENING))
+        #rospy.Subscriber(ROS_MESSAGE_I_TTS             , String, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_TTS))
         self.pub = rospy.Publisher(ROS_MESSAGE_O_ASR_TEXT, String, queue_size=10)
         self.start()
         #   Supervisor of the snips MQTT
@@ -99,9 +100,16 @@ class Snips_Anser(Thread):
         self.tests = Snips_Action_Tests()
 
     def run(self):
-        print("[MQTT]: rospy.spin()")
+        rospy.loginfo("[MQTT]: rospy.spin()")
         rospy.spin()
 
+    def callback_ros_on_message(self, message):
+        # Activer le mecanisme qui s'assure que Snips se met en mode ecoute
+        self.supervisor.listen_on_demand_flag = True
+        # Demander a snips le mode ecoute, peut ne pas marcher du premier coup
+        client.publish("hermes/hotword/default/detected", MQTT_ENABLE_LISTENING)
+        
+    """
     def callback_ros_on_message(self, message, topic):
         print("[RosSubscriper]" + message.data)
         if topic == ROS_MESSAGE_I_ACTIVE_LISTENING:
@@ -113,29 +121,33 @@ class Snips_Anser(Thread):
         elif topic == ROS_MESSAGE_I_TTS:
             print("[TTS]: " + str(message))
             self.mqtt_client.publish("hermes/tts/say", '{"text": "' + str(message.data) + '", "lang": "en", "siteId":"default"}')
+    """
 
     def on_connect(self, mqtt_client, userdata, flags, rc):
         if MQTT_SUBSCRIBE_ALL:
-            mqtt_client.subscribe("hermes/#")
-        mqtt_client.subscribe('hermes/intent/#')
-        mqtt_client.subscribe('hermes/tts/sayFinished')
-        mqtt_client.subscribe("hermes/hotword/default/detected")
-        mqtt_client.subscribe("hermes/dialogueManager/sessionStarted")
-        mqtt_client.subscribe("hermes/dialogueManager/sessionEnded")
-        print("Connected to {0} with result code {1}".format(MQTT_HOST, rc))
+            client.subscribe("hermes/#")
+        client.subscribe('hermes/intent/#')
+        client.subscribe('hermes/tts/sayFinished')
+        client.subscribe("hermes/hotword/default/detected")
+        client.subscribe("hermes/dialogueManager/sessionStarted")
+        client.subscribe("hermes/dialogueManager/sessionEnded")
+        rospy.loginfo("Connected to {0} with result code {1}".format(MQTT_HOST, rc))
 
     def on_message(self, mqtt_client, userdata, msg):
         """ On MQTT message : callback """
         if MQTT_SUBSCRIBE_ALL and msg.topic != "hermes/audioServer/default/audioFrame":
-            print(msg.topic)
-            # print(msg.payload.decode("utf-8"))
+            rospy.loginfo(msg.topic)
+            rospy.loginfo(msg.payload.decode("utf-8"))
 
         if MODE_TESTS:
             self.tests.execute(msg, mqtt_client)
 
         if msg.topic.find(MQTT_ALL_INTENT) == 0:
             brutText, sessionID = snips_get_speach_text(msg)
-            print("[ROS Publish]" + str(brutText))
+
+            # Remove unknown words
+            brutText.replace("unknownword", "")
+            rospy.loginfo("[ROS Publish]" + str(brutText))
             self.pub.publish(brutText)
             self.understand_at_time = time()
             mqtt_client.publish(MQTT_SNIPS_END_SESSION, '{"sessionId":"' + sessionID + '"}')
@@ -149,9 +161,11 @@ class Snips_Anser(Thread):
         if msg.topic == "hermes/dialogueManager/sessionEnded":
             self.pub.publish("sessionEnded")
             # Verrifier si snips as entendus quelque chose
-            if (self.understand_at_time < self.listening_start_time) and MODE_HELP_LISTENING:
-                print("[MQTT] Snips: rien entendus")
-                mqtt_client.publish("hermes/tts/say", '{"text": "I didnt ear anything", "lang": "en", "siteId":"default"}')
+            if (self.understand_at_time < self.listening_start_time):   #### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  A vérifier ce merge
+                rospy.loginfo("[MQTT] Snips: rien entendus")
+                # client.publish("hermes/tts/say", '{"text": "I didnt ear anything", "lang": "en", "siteId":"default"}')
+                self.pub.publish("")
+
             # Tests mode continus
             self.supervisor.listening = False
 
@@ -164,31 +178,37 @@ class Snips_Anser(Thread):
 
 class wm_snips_service():
     def __init__(self):
-        snips = Snips_Services_Start()
-        mqtt_client = mqtt.Client()
-        snips_anser = Snips_Anser(mqtt_client)
-        mqtt_client.on_connect = snips_anser.on_connect
-        mqtt_client.on_message = snips_anser.on_message
-        connected = mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)  # connected if 0
+        try:
+            snips = Snips_Services_Start()
+            mqtt_client = mqtt.Client()
+            snips_anser = Snips_Anser(mqtt_client)
+            mqtt_client.on_connect = snips_anser.on_connect
+            mqtt_client.on_message = snips_anser.on_message
+            connected = mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)  # connected if 0
 
-        messages = [
-            "I\'m Listening",
-            "Sara here",
-            "Hi",
-            "i like train",
-            "mon osti de calisse",
-            "Qua say tue veu tway",
-            "i\'m stock, but i\'m stil going!",
-            "you are not alone anymore",
-            "stop messing up with me",
-            "be carful with me"]
-        hello = messages[random.randint(0, len(messages) - 1)]
-        #hello = "I\'m Listening"
-        mqtt_client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
-        print("[MQTT]: loop_forever()")
-        mqtt_client.loop_forever()
-        snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
-
+            messages = [
+                "I\'m Listening",
+                "Sara here",
+                "Hi",
+                "i like train",
+                "mon osti de calisse",
+                "Qua say tue veu tway",
+                "i\'m stock, but i\'m stil going!",
+                "you are not alone anymore",
+                "stop messing up with me",
+                "be carful with me"]
+            hello = messages[random.randint(0, len(messages) - 1)]
+            #hello = "I\'m Listening"
+            #mqtt_client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
+            rospy.loginfo("[MQTT]: loop_forever()")
+            while not rospy.is_shutdown():
+                mqtt_client.loop()
+            #mqtt_client.loop_forever()
+            #snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
+       except rospy.ROSInterruptException:
+            rospy.loginfo("Killing snips")
+            snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
+            pass
 
 if __name__ == "__main__":
     wm_snips_service()

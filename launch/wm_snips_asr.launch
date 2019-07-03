@@ -1,4 +1,5 @@
 <launch>
     <node name="wm_snips_node" pkg="wm_snips_asr" type="wm_snips_service.py" output="screen" >
+        <remap from="/wm_snips_asr/asr_brut_text" to="/sara_command"/>
     </node>
 </launch>

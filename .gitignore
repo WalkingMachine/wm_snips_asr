@@ -2,5 +2,6 @@
 .vscode/.ropeproject/config.py
 .vscode/.ropeproject/objectdb
 src/snips_services.pyc
+__pycache__
 src/snips_tests.pyc
 src/wm_snips_service.pyc
