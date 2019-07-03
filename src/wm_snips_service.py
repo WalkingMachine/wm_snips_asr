@@ -25,10 +25,11 @@ ROS_MESSAGE_I_ACTIVE_LISTENING  = "/wm_snips_asr/enable_listening"
 ROS_MESSAGE_O_ASR_TEXT          = "/wm_snips_asr/asr_brut_text"
 #   Modes
 MQTT_SUBSCRIBE_ALL = True
-MODE_HELP_LISTENING = False #force a écouter a tout prix
+MODE_HELP_LISTENING = False  # force a écouter a tout prix
 SNIPS_AUTO_LISTEN  = False  # Non fonctionnel
 MODE_TESTS         = False
 MODE_TESTER        = True
+
 
 def snips_get_speach_text(msg):
     #   Retourne le texte brut comme le ARS as compris
@@ -86,8 +87,8 @@ class Snips_Anser(Thread):
         self.mqtt_client = mqtt_client
         rospy.init_node('wm_snips_service')
         rospy.Subscriber(ROS_MESSAGE_I_ACTIVE_LISTENING, Empty, self.callback_ros_on_message)
-        #rospy.Subscriber(ROS_MESSAGE_I_ACTIVE_LISTENING, String, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_ACTIVE_LISTENING))
-        #rospy.Subscriber(ROS_MESSAGE_I_TTS             , String, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_TTS))
+        # rospy.Subscriber(ROS_MESSAGE_I_TTS             , String, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_TTS))
+        # rospy.Subscriber(ROS_MESSAGE_I_ACTIVE_LISTENING, Empty, lambda message: self.callback_ros_on_message(message, ROS_MESSAGE_I_ACTIVE_LISTENING))
         self.pub = rospy.Publisher(ROS_MESSAGE_O_ASR_TEXT, String, queue_size=10)
         self.start()
         #   Supervisor of the snips MQTT
@@ -107,11 +108,13 @@ class Snips_Anser(Thread):
         # Activer le mecanisme qui s'assure que Snips se met en mode ecoute
         self.supervisor.listen_on_demand_flag = True
         # Demander a snips le mode ecoute, peut ne pas marcher du premier coup
-        client.publish("hermes/hotword/default/detected", MQTT_ENABLE_LISTENING)
-        
+        self.mqtt_client.publish("hermes/hotword/default/detected", MQTT_ENABLE_LISTENING)    
+
     """
     def callback_ros_on_message(self, message, topic):
+        print(topic)
         print("[RosSubscriper]" + message.data)
+        
         if topic == ROS_MESSAGE_I_ACTIVE_LISTENING:
             print("[LISTENING]: ")
             # Activer le mecanisme qui s'assure que Snips se met en mode ecoute
@@ -161,7 +164,7 @@ class Snips_Anser(Thread):
         if msg.topic == "hermes/dialogueManager/sessionEnded":
             self.pub.publish("sessionEnded")
             # Verrifier si snips as entendus quelque chose
-            if (self.understand_at_time < self.listening_start_time):   #### !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  A vérifier ce merge
+            if (self.understand_at_time < self.listening_start_time):   # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  A vérifier ce merge
                 rospy.loginfo("[MQTT] Snips: rien entendus")
                 # client.publish("hermes/tts/say", '{"text": "I didnt ear anything", "lang": "en", "siteId":"default"}')
                 self.pub.publish("")
@@ -198,17 +201,18 @@ class wm_snips_service():
                 "stop messing up with me",
                 "be carful with me"]
             hello = messages[random.randint(0, len(messages) - 1)]
-            #hello = "I\'m Listening"
-            #mqtt_client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
+            # hello = "I\'m Listening"
+            # mqtt_client.publish("hermes/tts/say", '{"text": "' + hello + '", "lang": "en", "siteId":"default"}')
             rospy.loginfo("[MQTT]: loop_forever()")
             while not rospy.is_shutdown():
                 mqtt_client.loop()
-            #mqtt_client.loop_forever()
-            #snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
-       except rospy.ROSInterruptException:
+            # mqtt_client.loop_forever()
+            # snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
+        except rospy.ROSInterruptException:
             rospy.loginfo("Killing snips")
             snips.stop()    # OUBLIGATOIRE ! Les process snips reste ouvert si non!
             pass
+
 
 if __name__ == "__main__":
     wm_snips_service()
